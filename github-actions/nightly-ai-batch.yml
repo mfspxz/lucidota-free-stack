@@ -1,0 +1,112 @@
+name: Nightly AI Batch
+
+on:
+  schedule:
+    # 03:00 UTC daily — quiet hours, cheap on every free tier
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  batch:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run batch research prompts
+        env:
+          AI_ROUTER_URL: ${{ secrets.AI_ROUTER_URL }}
+          AI_ROUTER_KEY: ${{ secrets.AI_ROUTER_KEY }}
+        run: |
+          python - <<'PYEOF'
+          import datetime, json, os, sys, urllib.request, urllib.error
+
+          ROUTER = (os.environ.get("AI_ROUTER_URL") or "").strip() \
+              or "https://ai-router.example.workers.dev"
+          ROUTER_KEY = (os.environ.get("AI_ROUTER_KEY") or "").strip()
+          ENDPOINT = ROUTER.rstrip("/") + "/v1/chat/completions"
+          TODAY = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+
+          PROMPTS = [
+              ("market-scan",
+               "Summarize the top 5 free-tier AI/developer service changes from the past "
+               "24h that affect a zero-budget automation stack. Terse bullet list."),
+              ("competitor-watch",
+               "List 3 notable launches or pricing changes this week in free AI inference, "
+               "free hosting, or free automation tools. One line each: what changed and "
+               "why it matters for a free-tier operator."),
+              ("idea-seeds",
+               "Generate 5 concrete, zero-budget growth experiments for a tricycle-based "
+               "mobile advertising company in Vancouver. Numbered, one line each."),
+          ]
+
+          def call_router(prompt):
+              payload = json.dumps({
+                  "model": "router-default",
+                  "messages": [
+                      {"role": "system",
+                       "content": "You are a terse research assistant. Plain markdown, no fluff."},
+                      {"role": "user", "content": prompt},
+                  ],
+                  "max_tokens": 1200,
+              }).encode()
+              headers = {"Content-Type": "application/json"}
+              if ROUTER_KEY:
+                  headers["Authorization"] = "Bearer " + ROUTER_KEY
+              req = urllib.request.Request(
+                  ENDPOINT,
+                  data=payload,
+                  headers=headers,
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=120) as resp:
+                      body = json.loads(resp.read().decode())
+              except urllib.error.URLError as e:
+                  print(f"ERROR calling router at {ENDPOINT}: {e}", file=sys.stderr)
+                  raise SystemExit(1)
+              try:
+                  return body["choices"][0]["message"]["content"]
+              except (KeyError, IndexError, TypeError):
+                  print(f"ERROR: unexpected router response: {body!r}", file=sys.stderr)
+                  raise SystemExit(1)
+
+          out_dir = os.path.join("batch", TODAY)
+          os.makedirs(out_dir, exist_ok=True)
+          for slug, prompt in PROMPTS:
+              print(f"--- prompt: {slug}")
+              content = call_router(prompt)
+              path = os.path.join(out_dir, f"{slug}.md")
+              with open(path, "w") as f:
+                  f.write(f"# {slug} — {TODAY} (UTC)\n\n{content}\n")
+              print(f"wrote {path}")
+
+          with open(os.path.join(out_dir, "index.md"), "w") as f:
+              f.write(f"# Nightly AI batch — {TODAY}\n\n")
+              for slug, _ in PROMPTS:
+                  f.write(f"- [{slug}](./{slug}.md)\n")
+          print("done")
+          PYEOF
+
+      - name: Commit and push results
+        run: |
+          git config user.name "freestack-bot"
+          git config user.email "freestack-bot@users.noreply.github.com"
+          git add batch/
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "nightly ai batch $(date -u +%F) [skip ci]"
+            git push
+          fi

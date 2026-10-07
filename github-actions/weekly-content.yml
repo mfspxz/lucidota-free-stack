@@ -1,0 +1,116 @@
+name: Weekly Content Drafts
+
+on:
+  schedule:
+    # Sunday 00:00 UTC — fresh drafts ready for Monday review
+    - cron: "0 0 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  content:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate posts and email draft
+        env:
+          AI_ROUTER_URL: ${{ secrets.AI_ROUTER_URL }}
+          AI_ROUTER_KEY: ${{ secrets.AI_ROUTER_KEY }}
+        run: |
+          python - <<'PYEOF'
+          import datetime, json, os, sys, urllib.request, urllib.error
+
+          ROUTER = (os.environ.get("AI_ROUTER_URL") or "").strip() \
+              or "https://ai-router.example.workers.dev"
+          ROUTER_KEY = (os.environ.get("AI_ROUTER_KEY") or "").strip()
+          ENDPOINT = ROUTER.rstrip("/") + "/v1/chat/completions"
+          TODAY = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+
+          BRAND = (
+              "Cute City Tricycle Corporation: solar-roofed pedicab trikes in Vancouver "
+              "carrying sapphire-glass-protected OLED ad screens, rolling 24/7. Tone: "
+              "playful, street-smart, cute-and-shitty in balance. Never corporate."
+          )
+
+          TASKS = [
+              ("posts.md",
+               "Write 5 distinct social media posts (each under 240 characters) promoting "
+               "the brand below. Mix: 2 funny, 1 informative, 1 call-to-action for "
+               "advertisers, 1 community vibe. Number them. No hashtags spam (max 2 each).",
+               BRAND),
+              ("email.md",
+               "Draft a short marketing email (subject line + under 150 words body) pitching "
+               "mobile billboard tricycle advertising in Vancouver to a local business. "
+               "Include a clear call to action. Brand context below.",
+               BRAND),
+          ]
+
+          def call_router(system, prompt):
+              payload = json.dumps({
+                  "model": "router-default",
+                  "messages": [
+                      {"role": "system", "content": system},
+                      {"role": "user", "content": prompt},
+                  ],
+                  "max_tokens": 1500,
+              }).encode()
+              headers = {"Content-Type": "application/json"}
+              if ROUTER_KEY:
+                  headers["Authorization"] = "Bearer " + ROUTER_KEY
+              req = urllib.request.Request(
+                  ENDPOINT,
+                  data=payload,
+                  headers=headers,
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=120) as resp:
+                      body = json.loads(resp.read().decode())
+              except urllib.error.URLError as e:
+                  print(f"ERROR calling router at {ENDPOINT}: {e}", file=sys.stderr)
+                  raise SystemExit(1)
+              try:
+                  return body["choices"][0]["message"]["content"]
+              except (KeyError, IndexError, TypeError):
+                  print(f"ERROR: unexpected router response: {body!r}", file=sys.stderr)
+                  raise SystemExit(1)
+
+          out_dir = os.path.join("content", TODAY)
+          os.makedirs(out_dir, exist_ok=True)
+          for filename, prompt, context in TASKS:
+              print(f"--- generating: {filename}")
+              content = call_router(
+                  "You are the copywriter for a scrappy Vancouver street-advertising "
+                  "startup. Punchy, human, zero corporate jargon.",
+                  f"{prompt}\n\nBrand context: {context}",
+              )
+              path = os.path.join(out_dir, filename)
+              with open(path, "w") as f:
+                  f.write(f"# {filename} — {TODAY} (UTC)\n\n{content}\n")
+              print(f"wrote {path}")
+          print("done")
+          PYEOF
+
+      - name: Commit and push results
+        run: |
+          git config user.name "freestack-bot"
+          git config user.email "freestack-bot@users.noreply.github.com"
+          git add content/
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "weekly content drafts $(date -u +%F) [skip ci]"
+            git push
+          fi

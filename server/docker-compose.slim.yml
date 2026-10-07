@@ -1,0 +1,161 @@
+# =============================================================================
+# FreeStack self-host stack — SLIM override for Oracle Always Free (2/12)
+# =============================================================================
+# WHAT THIS IS
+#   A Compose OVERRIDE, not a standalone file. It is merged on top of
+#   docker-compose.yml and re-shapes the stack for Oracle's Always Free
+#   Ampere A1 quota: 2 OCPU / 12 GB RAM (PROVEN current as of the June 2026
+#   cut; the old 4 OCPU / 24 GB figure is DISPROVEN for new accounts).
+#   The full stack (~10-12 GB) is marginal there, so slim drops the heavy
+#   services and caps everything else.
+#
+#   Boot with:
+#     docker compose -f docker-compose.yml -f docker-compose.slim.yml up -d
+#
+# WHAT SLIM CHANGES vs the full stack
+#   DROPPED (excluded via the "heavy" profile — they still exist in the base
+#   file but never start):
+#     infisical      (~600MB + its mongo ~700MB) -> replaced by vaultwarden
+#     mongo          only infisical needed it
+#     libretranslate (~1.5-2GB of models) — biggest single saver
+#     surrealdb      (~400MB) — CuteCity GIS/graph DB; restore when you have
+#                    the RAM. Its volume (surreal-data) is left in the base
+#                    file so data survives if you switch back.
+#   ADDED:
+#     vaultwarden    (~50MB) — password vault, replaces Infisical's role
+#   KEPT (all with memory limits):
+#     postgres, redis, n8n, authentik-server, authentik-worker,
+#     uptime-kuma, searxng
+#
+# RAM MATH (limits, worst case): ~5.3 GB — comfortably under 6 GB,
+#   leaving headroom on a 12 GB box for the OS + Pangolin/Tailscale.
+#   postgres 0.50G + redis 0.25G + n8n 1.50G + authentik 1.0G + 1.0G
+#   + kuma 0.40G + vaultwarden 0.13G + searxng 0.51G
+#
+# RESTORING A DROPPED SERVICE (when you move to a bigger box)
+#   docker compose -f docker-compose.yml -f docker-compose.slim.yml \
+#     --profile heavy up -d surrealdb
+#   (infisical/mongo need their :? env vars set in .env first.)
+#
+# PORTS — all still 127.0.0.1-bound. Slim exposes 8081 (vaultwarden) instead
+# of 8080 (infisical).
+# =============================================================================
+
+name: freestack
+
+services:
+  # ---------------------------------------------------------------- postgres
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # -------------------------------------------------------------------- redis
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  # -------------------------------------------------------------------- mongo
+  # Excluded in slim: only infisical needed it.
+  mongo:
+    profiles: ["heavy"]
+
+  # ---------------------------------------------------------------------- n8n
+  n8n:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
+
+  # -------------------------------------------------------------- uptime kuma
+  uptime-kuma:
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+        reservations:
+          memory: 128M
+
+  # ----------------------------------------------------------------- authentik
+  authentik-server:
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 400M
+
+  authentik-worker:
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 400M
+
+  # ----------------------------------------------------------------- infisical
+  # Excluded in slim: needs mongo, ~1.3GB with it. Vaultwarden takes its role.
+  infisical:
+    profiles: ["heavy"]
+
+  # ---------------------------------------------------------------
+  # VAULTWARDEN — the slim secrets vault (~50MB). Replaces infisical here.
+  # Requires VAULTWARDEN_DOMAIN + VAULTWARDEN_ADMIN_TOKEN in .env
+  # (see DEPLOY.md §3 and .env.example).
+  # ---------------------------------------------------------------
+  vaultwarden:
+    image: vaultwarden/server:latest # pin to a tested version for production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:80"
+    environment:
+      DOMAIN: ${VAULTWARDEN_DOMAIN:-http://localhost:8081}
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN:?Set VAULTWARDEN_ADMIN_TOKEN in .env (openssl rand -base64 48)}
+      SIGNUPS_ALLOWED: "false"
+      INVITATIONS_ALLOWED: "false"
+    volumes:
+      - vaultwarden-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/alive || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+    networks: [freestack]
+
+  # ----------------------------------------------------------------- surrealdb
+  # Excluded in slim (~400MB). CuteCity GIS/graph DB — restore with
+  # --profile heavy when you have the RAM. Volume survives in the base file.
+  surrealdb:
+    profiles: ["heavy"]
+
+  # ------------------------------------------------------------ libretranslate
+  # Excluded in slim (~1.5-2GB of models) — the single biggest RAM saver.
+  # Use a router AI lane for translation instead, or restore with
+  # --profile heavy.
+  libretranslate:
+    profiles: ["heavy"]
+
+  # ------------------------------------------------------------------- searxng
+  searxng:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

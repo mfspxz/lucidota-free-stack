@@ -1,0 +1,40 @@
+# cloudflared tunnel ingress — Cute Tentacle Cloud City
+#
+# HOW THIS WORKS
+#   The `cloudflared` compose service (profile: tunnel) opens an
+#   OUTBOUND-ONLY encrypted connection from this box to Cloudflare's edge.
+#   No open ports, no static IP, no firewall rules. Cloudflare terminates
+#   TLS and DDoS-shields every hostname below, then forwards over the tunnel
+#   to the service names on the compose `freestack` network.
+#
+# SETUP (full steps in cloudflare-tunnel.md)
+#   1. In the Zero Trust dashboard: create a tunnel named `freestack`,
+#      copy its token -> CLOUDFLARE_TUNNEL_TOKEN in .env
+#   2. Edit the hostnames below to YOUR domain
+#   3. In the dashboard, add the same hostnames as Public Hostnames
+#      (or let the dashboard create the DNS CNAMEs automatically)
+#   4. Start it: docker compose --profile tunnel up -d cloudflared
+#
+# NOTE: cloudflared does not expand env vars in this file — hostnames are
+# literal. Edit them by hand; that is the entire config surface.
+
+tunnel: freestack
+# Auth comes from the TUNNEL_TOKEN env var (set from CLOUDFLARE_TUNNEL_TOKEN
+# in the compose service) — no credentials-file needed.
+
+ingress:
+  # SurrealDB — graph/document DB for CuteCity GIS + Lucidota memory.
+  # Speaks HTTP + WebSocket; cloudflared proxies both fine.
+  - hostname: db.example.com
+    service: http://surrealdb:8000
+
+  # n8n — workflow automation. Put Cloudflare Access in front (see doc).
+  - hostname: n8n.example.com
+    service: http://n8n:5678
+
+  # Uptime Kuma — monitoring + public status page.
+  - hostname: status.example.com
+    service: http://uptime-kuma:3001
+
+  # Everything else: closed. No accidental exposure.
+  - service: http_status:404

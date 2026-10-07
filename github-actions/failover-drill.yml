@@ -1,0 +1,76 @@
+name: Failover Drill (AI Router Canary)
+
+# Canary: proves the AI router still has >=3 healthy lanes.
+# Fails LOUDLY (red run + ::error:: annotation) if not.
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Check router health
+        env:
+          AI_ROUTER_URL: ${{ secrets.AI_ROUTER_URL }}
+          AI_ROUTER_KEY: ${{ secrets.AI_ROUTER_KEY }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys, urllib.request
+
+          ROUTER = (os.environ.get("AI_ROUTER_URL") or "").strip() \
+              or "https://ai-router.example.workers.dev"
+          ROUTER_KEY = (os.environ.get("AI_ROUTER_KEY") or "").strip()
+          HEALTH = ROUTER.rstrip("/") + "/health"
+          MIN_HEALTHY_LANES = 3
+
+          headers = {}
+          if ROUTER_KEY:
+              headers["Authorization"] = "Bearer " + ROUTER_KEY
+          req = urllib.request.Request(HEALTH, headers=headers, method="GET")
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  body = json.loads(resp.read().decode())
+          except Exception as e:
+              print(f"::error::FAILOVER DRILL FAILED — router /health unreachable: {e}")
+              raise SystemExit(1)
+
+          lanes = body.get("lanes")
+          healthy = []
+          if isinstance(lanes, dict):
+              # Our /health shape: {"lanes": {"gemini": {"healthy": bool, ...}, ...}}
+              for name, lane in lanes.items():
+                  ok = bool((lane or {}).get("healthy", False))
+                  print(f"lane '{name}': {'healthy' if ok else 'DOWN'}")
+                  if ok:
+                      healthy.append(name)
+          elif isinstance(lanes, list):
+              for lane in lanes:
+                  name = lane.get("name", "?")
+                  ok = bool(lane.get("healthy", lane.get("ok", False)))
+                  print(f"lane '{name}': {'healthy' if ok else 'DOWN'}")
+                  if ok:
+                      healthy.append(name)
+          else:
+              # Fallback: flat counters, e.g. {"healthy_lanes": 4}
+              n = int(body.get("healthy_lanes", body.get("healthy", 0)))
+              healthy = [f"lane-{i}" for i in range(n)]
+              print(f"(flat counter mode) healthy lanes: {n}")
+
+          print(f"healthy lanes: {len(healthy)} (minimum required: {MIN_HEALTHY_LANES})")
+          if len(healthy) < MIN_HEALTHY_LANES:
+              print(
+                  f"::error::FAILOVER DRILL FAILED — only {len(healthy)} healthy "
+                  f"lane(s) {healthy}; need >= {MIN_HEALTHY_LANES}. "
+                  "Check lane keys/quotas and router failover config."
+              )
+              raise SystemExit(1)
+
+          print(f"::notice::failover drill PASSED — {len(healthy)} healthy lanes: {healthy}")
+          PYEOF

@@ -1,0 +1,158 @@
+flowchart TB
+    classDef you fill:#1a1a2e,stroke:#e94560,stroke-width:3px,color:#fff
+    classDef op fill:#16213e,stroke:#0f3460,stroke-width:2px,color:#fff
+    classDef brains fill:#1b2a4a,stroke:#4cc9f0,stroke-width:2px,color:#fff
+    classDef build fill:#2a1b4a,stroke:#b388ff,stroke-width:2px,color:#fff
+    classDef create fill:#4a2a1b,stroke:#ffb703,stroke-width:2px,color:#fff
+    classDef glue fill:#1b4a2a,stroke:#80ed99,stroke-width:2px,color:#fff
+    classDef out fill:#0f3460,stroke:#e94560,stroke-width:3px,color:#fff
+    classDef dead fill:#3a0a0a,stroke:#ff3333,stroke-width:2px,stroke-dasharray:5 5,color:#fff
+    classDef priv fill:#0a3a2a,stroke:#2ee6a8,stroke-width:2px,color:#fff
+    classDef demoted fill:#3a2a0a,stroke:#ffaa33,stroke-width:2px,stroke-dasharray:5 5,color:#fff
+    classDef built fill:#0a2a3a,stroke:#4cc9f0,stroke-width:3px,color:#fff
+
+    YOU([Zackary drops an idea]):::you --> LUCIDOTA
+
+    subgraph OPERATOR["LAYER 5 — THE OPERATOR"]
+        direction TB
+        LUCIDOTA["🧠 Lucidota (main agent)<br/>persistent VM · memory · decisions"]:::op
+        SUBS["⚡ Subagents ×N<br/>parallel workers"]:::op
+        JOBS["⏰ Scheduled jobs<br/>crons · hooks"]:::op
+        LUCIDOTA --> SUBS
+        LUCIDOTA --> JOBS
+    end
+
+    subgraph BRAINS["LAYER 1 — BRAINS · free AI inference (router order)"]
+        direction LR
+        GEMINI["① Google AI Studio<br/>~1.5K req/day"]:::brains
+        GROQ["② Groq<br/>~14K req/day small models"]:::brains
+        MISTRAL["③ Mistral<br/>1B tok/month"]:::brains
+        ZAI["④ z.ai (Zhipu GLM)<br/>optional · fragments only"]:::brains
+        NIM["⑤ NVIDIA NIM<br/>10K req/day · 40 RPM<br/>no token meter [PROVEN]"]:::brains
+        OROUTER["⑥ OpenRouter :free<br/>50 req/day"]:::brains
+        GEMINI -->|429/quota| GROQ
+        GROQ -->|429/quota| MISTRAL
+        MISTRAL -->|429/quota| ZAI
+        ZAI -->|429/quota| NIM
+        NIM -->|429/quota| OROUTER
+        KEYLESS["⑦-⑩ keyless tier<br/>Pollinations → Kilo → OVHcloud* → LLM7<br/>FRAGMENTS ONLY · zero signup"]:::priv
+        OROUTER -->|all keyed fail| KEYLESS
+        ROUTER["✅ BUILT: workers/ai-router.js<br/>11-lane OpenAI-compatible router (554 lines)<br/>auto-failover on 429/5xx/timeout<br/>ROUTER_KEY auth · /health telemetry"]:::built
+        ROUTER -.->|orchestrates| GEMINI
+        OVH["*OVHcloud anonymous lane<br/>privacy-sensitive only · EU no-training"]:::priv
+    end
+
+    subgraph BUILD["LAYER 2 — BUILD · compute at $0 (P→S→T)"]
+        direction LR
+        CF["① ☁️ Cloudflare<br/>Pages·Workers·D1·R2<br/>never sleeps"]:::build
+        ORA["② Oracle Always Free<br/>2 OCPU/12GB · 10TB egress<br/>card req · capacity friction"]:::build
+        DENO["③ Deno Deploy<br/>1M req/mo · no card<br/>commercial OK · no sleep"]:::build
+        CF -->|outage| ORA
+        ORA -->|capacity error| DENO
+        KOYEB["Koyeb — DEMOTED<br/>card req ($29 pre-auth) · sleeps 1h<br/>acquired by Mistral AI [PROVEN]<br/>sleep-tolerant tertiary ONLY"]:::demoted
+        DENO -.->|overflow| KOYEB
+        RENDER["Render — STAGING ONLY<br/>5GB/mo · SUSPENDS on exhaustion<br/>no card = kill-switch risk [PROVEN]"]:::demoted
+    end
+
+    subgraph DB["LAYER 2b — DATABASE (P→S→T)"]
+        direction LR
+        SURREAL["① Self-hosted SurrealDB<br/>single binary · his server / Oracle<br/>PRODUCTION for his Rust stack"]:::build
+        NEON["② Neon PG<br/>1GB/project · pgvector"]:::build
+        AIVEN["③ Aiven PG<br/>managed · no card · no time limit"]:::build
+        SURREAL --> NEON
+        NEON --> AIVEN
+        SDBCLOUD["SurrealDB Cloud — DEV ONLY<br/>1GB · auto-pauses 7 days<br/>prototyping, never production [PROVEN]"]:::demoted
+    end
+
+    subgraph GLUE["LAYER 4 — GLUE · 24/7 automation (P→S→T)"]
+        direction LR
+        N8N["① 🔁 n8n (your server)<br/>UNLIMITED · $0"]:::glue
+        AP["② Activepieces CE<br/>self-host unlimited"]:::glue
+        INNGEST["③ Inngest<br/>50K/mo managed"]:::glue
+        N8N -->|dies| AP
+        AP -->|dies| INNGEST
+        QS["QStash<br/>scheduler+queue"]:::glue
+        CFQ["Cloudflare Queues"]:::glue
+        HEART["cron-job.org<br/>external heartbeat"]:::glue
+        QS --> CFQ
+        HEART -.->|pages Lucidota| N8N
+        N8NBUILT["✅ BUILT: n8n/ templates<br/>content-pipeline.json<br/>nightly-digest.json<br/>heartbeat-healthcheck.json"]:::built
+        N8NBUILT -.-> N8N
+    end
+
+    subgraph CREATE["LAYER 3 — CREATE · marketing & content (P→S→T)"]
+        direction LR
+        BREVO["① Brevo<br/>100K contacts"]:::create
+        SENDER["② Sender<br/>③ Kit"]:::create
+        BREVO --> SENDER
+        BUFFER["① Buffer"]:::create
+        PUBLER["② Publer<br/>LinkedIn+GBP"]:::create
+        BUFFER --> PUBLER
+        LEO["① Leonardo"]:::create
+        IDEO["② Ideogram"]:::create
+        DREAM["③ Dreamina"]:::create
+        LEO --> IDEO
+        IDEO --> DREAM
+        CANVA["Canva"]:::create
+        CAPCUT["CapCut"]:::create
+        NOTION["Notion<br/>company brain"]:::create
+    end
+
+    subgraph DATA["LAYER 8 — DATA APIS (P→S→T)"]
+        direction LR
+        SEARCH["Search: Tavily 1K/mo<br/>→ Exa → SearXNG self-host"]:::brains
+        GDELT["News: GDELT<br/>unlimited · keyless · commercial OK"]:::brains
+        WX["Weather: WeatherAPI 100K/mo<br/>commercial OK → MET Norway"]:::brains
+        GEO["Geo: Nominatim 1 req/s<br/>→ OpenRouteService 2K/day"]:::brains
+        MAPBOX["Mapbox — DEMOTED<br/>card required [PROVEN]<br/>only if card added later"]:::demoted
+        GEO -.-> MAPBOX
+        FXSTT["FX: Frankfurter unlimited<br/>STT: Groq Whisper ~8h/day<br/>TTS: TTSMaker → Piper self-host"]:::brains
+    end
+
+    subgraph NET["LAYER 6 — NETWORK · DNS/CDN/MESH/STORAGE"]
+        direction LR
+        DNS["DNS: CF → deSEC → HE.net/1984.is<br/>(parallel authoritative)"]:::build
+        CDN["CDN: CF → Gcore 1TB → origin-direct"]:::build
+        MESH["Mesh: Tailscale 100 → NetBird → Pangolin<br/>ZeroTier 25 as L2 fallback"]:::build
+        STORE["Storage: R2 → B2 → Tigris<br/>Media: Cloudinary/ImageKit"]:::build
+    end
+
+    subgraph OBS["LAYER 7 — OBSERVABILITY · watchers watch watchers"]
+        direction LR
+        KUMA["Uptime Kuma<br/>self-host"]:::glue
+        UPPTIME["Upptime<br/>GitHub Actions"]:::glue
+        BSTACK["Better Stack"]:::glue
+        KUMA --> UPPTIME
+        UPPTIME --> BSTACK
+        GRAF["Grafana Cloud 50GB"]:::glue
+        SENTRY["Sentry 5K"]:::glue
+        POSTHOG["PostHog 1M"]:::glue
+    end
+
+    subgraph DEATH["☠️ DEATH SCENARIOS — designed not to fail"]
+        direction TB
+        D1["n8n server dies → cron-job.org heartbeat fires → Lucidota paged → Inngest picks up critical workflows"]:::dead
+        D2["Cloudflare dies → Oracle + Deno serve traffic → deSEC already authoritative on DNS<br/>(Koyeb NOT in always-on path — sleeps, card-blocked)"]:::dead
+        D3["Any AI lane 429s → ai-router auto-rotates → OVHcloud lane for sensitive"]:::dead
+        D4["Any free tier dies (2026 die-off pattern) → secondary already warm → 24h replace rule"]:::dead
+        D5["FOE provider turns hostile → kill-switch: fragments only, nothing structural"]:::dead
+        D6["Self-host SurrealDB dies → Neon/Aiven replicas take over<br/>nightly exports to 2 of 3 · SurrealDB Cloud never production"]:::dead
+        D7["Card-or-sleep traps (Koyeb/Render/Mapbox) → tertiary or staging ONLY<br/>never load-bearing without a card on file"]:::dead
+    end
+
+    LUCIDOTA --> BRAINS
+    SUBS --> BRAINS
+    SUBS --> BUILD
+    LUCIDOTA --> GLUE
+    N8N --> BRAINS
+    N8N --> CREATE
+    N8N --> BUILD
+    QS --> N8N
+    BUILD --> CREATE
+    NET -.-> BUILD
+    OBS -.-> GLUE
+    DATA -.-> N8N
+    DB -.-> BUILD
+
+    CREATE --> SHIPPED([Shipped 24/7:<br/>code · ads · content · research]):::out
+    BUILD --> SHIPPED
