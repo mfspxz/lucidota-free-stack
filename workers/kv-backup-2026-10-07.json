@@ -1,0 +1,81 @@
+{
+ "moduleWeekStart": 0,
+ "nowWeekStart": 1791158400000,
+ "mem": {
+  "pollinations": {
+   "wReq": 9,
+   "wTokens": 1925,
+   "ok": 3,
+   "fail": 6,
+   "tokTotal": 1925
+  },
+  "kilo": {
+   "wReq": 5,
+   "wTokens": 667,
+   "ok": 2,
+   "fail": 3,
+   "tokTotal": 667
+  },
+  "ovh": {
+   "wReq": 4,
+   "wTokens": 0,
+   "ok": 0,
+   "fail": 4,
+   "tokTotal": 0
+  },
+  "llm7": {
+   "wReq": 4,
+   "wTokens": 0,
+   "ok": 0,
+   "fail": 4,
+   "tokTotal": 0
+  }
+ },
+ "docLanes": {
+  "pollinations": {
+   "wReq": 9,
+   "wTokens": 1925,
+   "ok": 3,
+   "fail": 6,
+   "tokTotal": 1925,
+   "latTotalMs": 18284,
+   "latN": 3,
+   "hedged": 0
+  },
+  "kilo": {
+   "wReq": 5,
+   "wTokens": 667,
+   "ok": 2,
+   "fail": 3,
+   "tokTotal": 667,
+   "latTotalMs": 34009,
+   "latN": 2,
+   "hedged": 0
+  },
+  "ovh": {
+   "wReq": 4,
+   "wTokens": 0,
+   "ok": 0,
+   "fail": 4,
+   "tokTotal": 0,
+   "latTotalMs": 0,
+   "latN": 0,
+   "hedged": 0
+  },
+  "llm7": {
+   "wReq": 4,
+   "wTokens": 0,
+   "ok": 0,
+   "fail": 4,
+   "tokTotal": 0,
+   "latTotalMs": 0,
+   "latN": 0,
+   "hedged": 0
+  }
+ },
+ "_backup_meta": {
+  "taken_utc": "2026-10-07T16:25:00Z",
+  "source": "GET /admin/debug ai-router.cutecity.workers.dev",
+  "note": "diagnostic view of shared KV doc (mem + docLanes); not raw KV bytes"
+ }
+}
