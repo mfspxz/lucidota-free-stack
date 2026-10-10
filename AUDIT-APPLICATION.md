@@ -115,7 +115,7 @@ None. No code, doc, or claim changes applied. This document is the deliverable; 
 
 ## Commits
 
-TBD.
+`c950b6d` (brutal-audit: R-1..R-12 policy application pass, docs repo).
 
 ## Test counts
 
