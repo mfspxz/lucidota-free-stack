@@ -1,3 +1,5 @@
+[Active R&D Lab] — no CI runs on record; active development, expect rough edges.
+
 # FreeStack — Master Index
 Operation FreeStack ("Cute Tentacle Cloud City") · built 2026-10-05 (PDT)
 
